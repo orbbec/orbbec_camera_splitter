@@ -90,7 +90,7 @@ OrbbecCameraSplitterNode::OrbbecCameraSplitterNode(
 int OrbbecCameraSplitterNode::getEmitterModeFromMetadataMsg(
     const orbbec_camera_msgs::msg::Metadata::ConstSharedPtr& metadata) {
   // Field name in json metadata
-  std::string frame_emitter_mode_str = "emitter_mode";
+  std::string frame_emitter_mode_str = "frame_emitter_mode";
   nlohmann::json json_data = nlohmann::json::parse(metadata->json_data);
   int emitter_mode = json_data[frame_emitter_mode_str];
   return emitter_mode;
