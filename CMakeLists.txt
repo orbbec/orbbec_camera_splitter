@@ -21,6 +21,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(message_filters REQUIRED)
 find_package(orbbec_camera_msgs REQUIRED)
 find_package(nvblox_ros_common REQUIRED)
+find_package(isaac_ros_common REQUIRED)
 find_package(CUDAToolkit REQUIRED)
 
 
@@ -39,6 +40,7 @@ ament_target_dependencies(${PROJECT_NAME}_component
   message_filters
   orbbec_camera_msgs
   nvblox_ros_common
+  isaac_ros_common
 )
 target_include_directories(${PROJECT_NAME}_component PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
