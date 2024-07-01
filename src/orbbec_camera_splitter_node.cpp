@@ -19,12 +19,10 @@
 
 #include <isaac_ros_common/qos.hpp>
 
-namespace nvblox
-{
+namespace nvblox {
 
-OrbbecCameraSplitterNode::OrbbecCameraSplitterNode(const rclcpp::NodeOptions & options)
-: Node("orbbec_camera_splitter_node", options)
-{
+OrbbecCameraSplitterNode::OrbbecCameraSplitterNode(const rclcpp::NodeOptions& options)
+    : Node("orbbec_camera_splitter_node", options) {
   RCLCPP_INFO(get_logger(), "Creating a OrbbecCameraSplitterNode().");
 
   // Subscriber/Publisher parameters
@@ -33,10 +31,10 @@ OrbbecCameraSplitterNode::OrbbecCameraSplitterNode(const rclcpp::NodeOptions & o
   constexpr size_t kOutputQueueSize = 10;
 
   const rclcpp::QoS input_qos = isaac_ros::common::AddQosParameter(*this, kDefaultQoS, "input_qos")
-    .keep_last(kInputQueueSize);
+                                    .keep_last(kInputQueueSize);
   const rclcpp::QoS output_qos =
-    isaac_ros::common::AddQosParameter(*this, kDefaultQoS, "output_qos")
-    .keep_last(kOutputQueueSize);
+      isaac_ros::common::AddQosParameter(*this, kDefaultQoS, "output_qos")
+          .keep_last(kOutputQueueSize);
   const rmw_qos_profile_t input_qos_profile = input_qos.get_rmw_qos_profile();
 
   // Subscribe to synchronized depth + cam_info topics
@@ -49,107 +47,89 @@ OrbbecCameraSplitterNode::OrbbecCameraSplitterNode(const rclcpp::NodeOptions & o
   pointcloud_sub_.subscribe(this, "input/pointcloud", input_qos_profile);
   pointcloud_metadata_sub_.subscribe(this, "input/pointcloud_metadata", input_qos_profile);
 
-  timesync_infra_1_.reset(
-    new message_filters::Synchronizer<image_time_policy_t>(
+  timesync_infra_1_.reset(new message_filters::Synchronizer<image_time_policy_t>(
       image_time_policy_t(kInputQueueSize), infra_1_sub_, infra_1_metadata_sub_));
-  timesync_infra_1_->registerCallback(
-    std::bind(
-      &OrbbecCameraSplitterNode::image1Callback, this,
-      std::placeholders::_1, std::placeholders::_2));
-  timesync_infra_2_.reset(
-    new message_filters::Synchronizer<image_time_policy_t>(
+  timesync_infra_1_->registerCallback(std::bind(&OrbbecCameraSplitterNode::image1Callback, this,
+                                                std::placeholders::_1, std::placeholders::_2));
+  timesync_infra_2_.reset(new message_filters::Synchronizer<image_time_policy_t>(
       image_time_policy_t(kInputQueueSize), infra_2_sub_, infra_2_metadata_sub_));
-  timesync_infra_2_->registerCallback(
-    std::bind(
-      &OrbbecCameraSplitterNode::image2Callback, this,
-      std::placeholders::_1, std::placeholders::_2));
-  timesync_depth_.reset(
-    new message_filters::Synchronizer<image_time_policy_t>(
+  timesync_infra_2_->registerCallback(std::bind(&OrbbecCameraSplitterNode::image2Callback, this,
+                                                std::placeholders::_1, std::placeholders::_2));
+  timesync_depth_.reset(new message_filters::Synchronizer<image_time_policy_t>(
       image_time_policy_t(kInputQueueSize), depth_sub_, depth_metadata_sub_));
-  timesync_depth_->registerCallback(
-    std::bind(
-      &OrbbecCameraSplitterNode::depthCallback, this,
-      std::placeholders::_1, std::placeholders::_2));
-  timesync_pointcloud_.reset(
-    new message_filters::Synchronizer<pointcloud_time_policy_t>(
+  timesync_depth_->registerCallback(std::bind(&OrbbecCameraSplitterNode::depthCallback, this,
+                                              std::placeholders::_1, std::placeholders::_2));
+  timesync_pointcloud_.reset(new message_filters::Synchronizer<pointcloud_time_policy_t>(
       pointcloud_time_policy_t(kInputQueueSize), pointcloud_sub_, pointcloud_metadata_sub_));
-  timesync_pointcloud_->registerCallback(
-    std::bind(
-      &OrbbecCameraSplitterNode::pointcloudCallback, this,
-      std::placeholders::_1, std::placeholders::_2));
+  timesync_pointcloud_->registerCallback(std::bind(&OrbbecCameraSplitterNode::pointcloudCallback,
+                                                   this, std::placeholders::_1,
+                                                   std::placeholders::_2));
 
   // Publisher
   infra_1_pub_ = create_publisher<sensor_msgs::msg::Image>("~/output/infra_1", output_qos);
   infra_2_pub_ = create_publisher<sensor_msgs::msg::Image>("~/output/infra_2", output_qos);
   depth_pub_ = create_publisher<sensor_msgs::msg::Image>("~/output/depth", output_qos);
   pointcloud_pub_ =
-    create_publisher<sensor_msgs::msg::PointCloud2>("~/output/pointcloud", output_qos);
+      create_publisher<sensor_msgs::msg::PointCloud2>("~/output/pointcloud", output_qos);
 }
 
 int OrbbecCameraSplitterNode::getEmitterModeFromMetadataMsg(
-  const orbbec_camera_msgs::msg::Metadata::ConstSharedPtr & metadata)
-{
+    const orbbec_camera_msgs::msg::Metadata::ConstSharedPtr& metadata) {
   // Field name in json metadata
   constexpr char frame_emitter_mode_str[] = "\"frame_emitter_mode\":";
   constexpr size_t field_name_length =
-    sizeof(frame_emitter_mode_str) / sizeof(frame_emitter_mode_str[0]);
+      sizeof(frame_emitter_mode_str) / sizeof(frame_emitter_mode_str[0]);
   // Find the field
   const size_t frame_emitter_mode_start_location = metadata->json_data.find(frame_emitter_mode_str);
   // If the emitter mode is not found, return unknown and warn the user.
   if (frame_emitter_mode_start_location == metadata->json_data.npos) {
     constexpr int kPublishPeriodMs = 1000;
-    auto & clk = *get_clock();
+    auto& clk = *get_clock();
     RCLCPP_WARN_THROTTLE(
-      get_logger(), clk, kPublishPeriodMs,
-      "Realsense frame metadata did not contain \"frame_emitter_mode\". Splitter will not work.");
+        get_logger(), clk, kPublishPeriodMs,
+        "Realsense frame metadata did not contain \"frame_emitter_mode\". Splitter will not work.");
     return static_cast<int>(EmitterMode::kUnknown);
   }
   // If it is found, parse the field.
   const size_t field_location = frame_emitter_mode_start_location + field_name_length - 1;
   const int emitter_mode =
-    static_cast<int>(metadata->json_data[field_location]) - static_cast<int>('0');
+      static_cast<int>(metadata->json_data[field_location]) - static_cast<int>('0');
   return emitter_mode;
 }
 
-template<typename MessageType>
+template <typename MessageType>
 void OrbbecCameraSplitterNode::republishIfEmitterMode(
-  const typename MessageType::ConstSharedPtr & image,
-  const orbbec_camera_msgs::msg::Metadata::ConstSharedPtr & metadata,
-  const EmitterMode emitter_mode, typename rclcpp::Publisher<MessageType>::SharedPtr & publisher)
-{
+    const typename MessageType::ConstSharedPtr& image,
+    const orbbec_camera_msgs::msg::Metadata::ConstSharedPtr& metadata,
+    const EmitterMode emitter_mode, typename rclcpp::Publisher<MessageType>::SharedPtr& publisher) {
   if (getEmitterModeFromMetadataMsg(metadata) == static_cast<int>(emitter_mode)) {
     publisher->publish(*image);
   }
 }
 
 void OrbbecCameraSplitterNode::image1Callback(
-  sensor_msgs::msg::Image::ConstSharedPtr image,
-  orbbec_camera_msgs::msg::Metadata::ConstSharedPtr metadata)
-{
+    sensor_msgs::msg::Image::ConstSharedPtr image,
+    orbbec_camera_msgs::msg::Metadata::ConstSharedPtr metadata) {
   republishIfEmitterMode<sensor_msgs::msg::Image>(image, metadata, EmitterMode::kOff, infra_1_pub_);
 }
 
 void OrbbecCameraSplitterNode::image2Callback(
-  sensor_msgs::msg::Image::ConstSharedPtr image,
-  orbbec_camera_msgs::msg::Metadata::ConstSharedPtr metadata)
-{
+    sensor_msgs::msg::Image::ConstSharedPtr image,
+    orbbec_camera_msgs::msg::Metadata::ConstSharedPtr metadata) {
   republishIfEmitterMode<sensor_msgs::msg::Image>(image, metadata, EmitterMode::kOff, infra_2_pub_);
 }
 
 void OrbbecCameraSplitterNode::depthCallback(
-  sensor_msgs::msg::Image::ConstSharedPtr image,
-  orbbec_camera_msgs::msg::Metadata::ConstSharedPtr metadata)
-{
+    sensor_msgs::msg::Image::ConstSharedPtr image,
+    orbbec_camera_msgs::msg::Metadata::ConstSharedPtr metadata) {
   republishIfEmitterMode<sensor_msgs::msg::Image>(image, metadata, EmitterMode::kOn, depth_pub_);
 }
 
 void OrbbecCameraSplitterNode::pointcloudCallback(
-  sensor_msgs::msg::PointCloud2::ConstSharedPtr pointcloud,
-  orbbec_camera_msgs::msg::Metadata::ConstSharedPtr metadata)
-{
-  republishIfEmitterMode<sensor_msgs::msg::PointCloud2>(
-    pointcloud, metadata, EmitterMode::kOn,
-    pointcloud_pub_);
+    sensor_msgs::msg::PointCloud2::ConstSharedPtr pointcloud,
+    orbbec_camera_msgs::msg::Metadata::ConstSharedPtr metadata) {
+  republishIfEmitterMode<sensor_msgs::msg::PointCloud2>(pointcloud, metadata, EmitterMode::kOn,
+                                                        pointcloud_pub_);
 }
 
 }  // namespace nvblox
