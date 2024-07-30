@@ -18,13 +18,14 @@
 #include "orbbec_camera_splitter/orbbec_camera_splitter_node.hpp"
 
 #include <nvblox_ros_common/qos.hpp>
+#include "orbbec_camera_splitter/json.hpp"
 
 namespace nvblox {
 
 
     OrbbecCameraSplitterNode::
     OrbbecCameraSplitterNode(const rclcpp::NodeOptions &options)
-            : Node("realsense_splitter_node", options) {
+            : Node("orbbec_camera_splitter_node", options) {
         RCLCPP_INFO(get_logger(), "Creating a "
                                   "OrbbecCameraSplitterNode().");
 
@@ -102,27 +103,8 @@ namespace nvblox {
     OrbbecCameraSplitterNode::getEmitterModeFromMetadataMsg(
             const orbbec_camera_msgs::msg::Metadata::ConstSharedPtr &metadata) {
         // Field name in json metadata
-        constexpr char frame_emitter_mode_str[] = "\"frame_emitter_mode\":";
-        constexpr size_t field_name_length =
-                sizeof(frame_emitter_mode_str) / sizeof(frame_emitter_mode_str[0]);
-        // Find the field
-        const size_t frame_emitter_mode_start_location =
-                metadata->json_data.find(frame_emitter_mode_str);
-        // If the emitter mode is not found, return unknown and warn the user.
-        if (frame_emitter_mode_start_location == metadata->json_data.npos) {
-            constexpr int kPublishPeriodMs = 1000;
-            auto &clk = *get_clock();
-            RCLCPP_WARN_THROTTLE(
-                    get_logger(), clk, kPublishPeriodMs,
-                    "Realsense frame metadata did not contain \"frame_emitter_mode\". Splitter will not work.");
-            return static_cast<int>(EmitterMode::kUnknown);
-        }
-        // If it is found, parse the field.
-        const size_t field_location = frame_emitter_mode_start_location + field_name_length - 1;
-        const int emitter_mode =
-                static_cast<int>(metadata->json_data[field_location]) -
-                static_cast<int>('0');
-        return emitter_mode;
+        auto json_data = nlohmann::json::parse(metadata->json_data);
+        return int(json_data["frame_emitter_mode"]);
     }
 
     template<typename MessageType>
@@ -176,5 +158,4 @@ namespace nvblox {
 // Register the node as a component
 #include "rclcpp_components/register_node_macro.hpp"
 
-RCLCPP_COMPONENTS_REGISTER_NODE(nvblox::
-                                        OrbbecCameraSplitterNode)
+RCLCPP_COMPONENTS_REGISTER_NODE(nvblox::OrbbecCameraSplitterNode)

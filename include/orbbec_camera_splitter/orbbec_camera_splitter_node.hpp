@@ -15,8 +15,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef REALSENSE_SPLITTER__REALSENSE_SPLITTER_NODE_HPP_
-#define REALSENSE_SPLITTER__REALSENSE_SPLITTER_NODE_HPP_
+#pragma once
 
 #include <message_filters/subscriber.h>
 #include <message_filters/sync_policies/exact_time.h>
@@ -111,4 +110,3 @@ private:
 
 }  // namespace nvblox
 
-#endif  // REALSENSE_SPLITTER__REALSENSE_SPLITTER_NODE_HPP_
