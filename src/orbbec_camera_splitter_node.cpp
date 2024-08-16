@@ -15,11 +15,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+
 #include "orbbec_camera_splitter/orbbec_camera_splitter_node.hpp"
 
-#include <nvblox_ros_common/qos.hpp>
+// #include <nvblox_ros_common/qos.hpp>
 #include "orbbec_camera_splitter/json.hpp"
-
+#include <isaac_ros_common/qos.hpp>
 namespace nvblox {
 
 
@@ -31,31 +32,31 @@ namespace nvblox {
 
         // Parameters
         const std::string kDefaultQoS = "SYSTEM_DEFAULT";
-        std::string input_qos_str =
-                declare_parameter<std::string>("input_qos", kDefaultQoS);
-        std::string output_qos_str =
-                declare_parameter<std::string>("output_qos", kDefaultQoS);
+        constexpr size_t kInputQueueSize = 10;
+        constexpr size_t kOutputQueueSize = 10;
+        const rclcpp::QoS input_qos = isaac_ros::common::AddQosParameter(*this, kDefaultQoS, "input_qos")
+            .keep_last(kInputQueueSize);
+        const rclcpp::QoS output_qos =
+            isaac_ros::common::AddQosParameter(*this, kDefaultQoS, "output_qos")
+            .keep_last(kOutputQueueSize);
+        const rmw_qos_profile_t input_qos_profile = input_qos.get_rmw_qos_profile();
+        infra_1_sub_.subscribe(this, "input/infra_1", input_qos_profile);
+        infra_1_metadata_sub_.subscribe(this, "input/infra_1_metadata", input_qos_profile);
+        infra_2_sub_.subscribe(this, "input/infra_2", input_qos_profile);
+        infra_2_metadata_sub_.subscribe(this, "input/infra_2_metadata", input_qos_profile);
+        depth_sub_.subscribe(this, "input/depth", input_qos_profile);
+        depth_metadata_sub_.subscribe(this, "input/depth_metadata", input_qos_profile);
+        pointcloud_sub_.subscribe(this, "input/pointcloud", input_qos_profile);
+        pointcloud_metadata_sub_.subscribe(this, "input/pointcloud_metadata", input_qos_profile);
 
-        // Subscribe to synchronized depth + cam_info topics
-        const auto input_qos = parseQosString(input_qos_str);
-        infra_1_sub_.subscribe(this, "input/infra_1", input_qos);
-        infra_1_metadata_sub_.subscribe(this, "input/infra_1_metadata", input_qos);
-        infra_2_sub_.subscribe(this, "input/infra_2", input_qos);
-        infra_2_metadata_sub_.subscribe(this, "input/infra_2_metadata", input_qos);
-        depth_sub_.subscribe(this, "input/depth", input_qos);
-        depth_metadata_sub_.subscribe(this, "input/depth_metadata", input_qos);
-        pointcloud_sub_.subscribe(this, "input/pointcloud", input_qos);
-        pointcloud_metadata_sub_.subscribe(this, "input/pointcloud_metadata", input_qos);
-
-        constexpr int kInputQueueSize = 10;
+        // constexpr int kInputQueueSize = 10;
         timesync_infra_1_.reset(
                 new message_filters::Synchronizer<image_time_policy_t>(
                         image_time_policy_t(kInputQueueSize), infra_1_sub_,
                         infra_1_metadata_sub_));
         timesync_infra_1_->registerCallback(
                 std::bind(
-                        &
-                                OrbbecCameraSplitterNode::image1Callback, this,
+                        &OrbbecCameraSplitterNode::image1Callback, this,
                         std::placeholders::_1, std::placeholders::_2));
         timesync_infra_2_.reset(
                 new message_filters::Synchronizer<image_time_policy_t>(
@@ -63,16 +64,14 @@ namespace nvblox {
                         infra_2_metadata_sub_));
         timesync_infra_2_->registerCallback(
                 std::bind(
-                        &
-                                OrbbecCameraSplitterNode::image2Callback, this,
+                        &OrbbecCameraSplitterNode::image2Callback, this,
                         std::placeholders::_1, std::placeholders::_2));
         timesync_depth_.reset(
                 new message_filters::Synchronizer<image_time_policy_t>(
                         image_time_policy_t(kInputQueueSize), depth_sub_, depth_metadata_sub_));
         timesync_depth_->registerCallback(
                 std::bind(
-                        &
-                                OrbbecCameraSplitterNode::depthCallback, this,
+                        &OrbbecCameraSplitterNode::depthCallback, this,
                         std::placeholders::_1, std::placeholders::_2));
         timesync_pointcloud_.reset(
                 new message_filters::Synchronizer<pointcloud_time_policy_t>(
@@ -80,15 +79,14 @@ namespace nvblox {
                         pointcloud_metadata_sub_));
         timesync_pointcloud_->registerCallback(
                 std::bind(
-                        &
-                                OrbbecCameraSplitterNode::pointcloudCallback, this,
+                        &OrbbecCameraSplitterNode::pointcloudCallback, this,
                         std::placeholders::_1, std::placeholders::_2));
 
         // Publisher
-        constexpr size_t kOutputQueueSize = 10;
-        const auto output_qos = rclcpp::QoS(
-                rclcpp::KeepLast(kOutputQueueSize),
-                parseQosString(output_qos_str));
+        // constexpr size_t kOutputQueueSize = 10;
+        // const auto output_qos = rclcpp::QoS(
+        //         rclcpp::KeepLast(kOutputQueueSize),
+        //         parseQosString(output_qos_str));
         infra_1_pub_ =
                 create_publisher<sensor_msgs::msg::Image>("~/output/infra_1", output_qos);
         infra_2_pub_ =
@@ -102,7 +100,7 @@ namespace nvblox {
     int
     OrbbecCameraSplitterNode::getEmitterModeFromMetadataMsg(
             const orbbec_camera_msgs::msg::Metadata::ConstSharedPtr &metadata) {
-        // Field name in json metadata
+            // Field name in json metadata
         auto json_data = nlohmann::json::parse(metadata->json_data);
         return int(json_data["frame_emitter_mode"]);
     }
